@@ -1,34 +1,31 @@
 node {
-    def app
+    def imageName = "juberalam308/test"
+    def tag = "${env.BUILD_NUMBER}"
 
     stage('Clone repository') {
-      
-
         checkout scm
     }
 
     stage('Build image') {
-  
-       app = docker.build("juberalam308/test")
+        sh "docker build -t ${imageName}:${tag} ."
     }
 
     stage('Test image') {
-  
-
-        app.inside {
-            sh 'echo "Tests passed"'
-        }
+        sh "docker run --rm ${imageName}:${tag} echo 'Tests passed'"
     }
 
     stage('Push image') {
-        
-        docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
-            app.push("${env.BUILD_NUMBER}")
+        withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            sh '''
+                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                docker push ${imageName}:${BUILD_NUMBER}
+                docker logout
+            '''
         }
     }
-    
+
     stage('Trigger ManifestUpdate') {
-                echo "triggering updatemanifestjob"
-                build job: 'updatemanifest', parameters: [string(name: 'DOCKERTAG', value: env.BUILD_NUMBER)]
-        }
+        echo "triggering updatemanifest job"
+        build job: 'updatemanifest', parameters: [string(name: 'DOCKERTAG', value: env.BUILD_NUMBER)]
+    }
 }
